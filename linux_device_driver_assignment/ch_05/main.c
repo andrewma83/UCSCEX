@@ -34,6 +34,8 @@ CDD_init (void)
         i = proc_file_create();
         if (i) break;
 
+        i = ct_init();
+        if (i) break;
         
     } while (0);
     
@@ -45,6 +47,7 @@ CDD_exit (void)
 {
     device_exit();
     proc_file_destroy();
+    ct_exit();
 }
 
 module_init (CDD_init);

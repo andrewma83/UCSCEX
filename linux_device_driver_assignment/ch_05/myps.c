@@ -22,63 +22,35 @@
 #include <linux/slab.h>
 #include "main.h"
 
-struct flag_table_t {
-    unsigned long flags;
+struct state_table_t {
+    long state;
     const char *readable_str;
-    const char *flag_str;
 };
 
-struct flag_table_t flag_table [] = {
-    { PF_EXITING,        "PF_EXITING"    , "X" },
-    { PF_EXITPIDONE,	 "PF_EXITPIDONE" , "XD"},
-    { PF_VCPU,		 "PFVCPU"        , "V"},
-    { PF_WQ_WORKER,      "PF_WQ_WORKER"  , "WQ"},
-    { PF_FORKNOEXEC,	 "PF_FORKNOEXEC" , "FNO"},
-    { PF_MCE_PROCESS,    "PF_MCE_PROCESS", "MP"},
-    { PF_SUPERPRIV,	 "PF_SUPERPRIV"  , "SP"},
-    { PF_DUMPCORE,	 "PF_DUMPCORE"   , "DC"  },
-    { PF_SIGNALED,       "PF_SIGNALED"   , "SIG"},
-    { PF_MEMALLOC,       "PF_MEMALLOC"   , "MEM"},
-    { PF_NPROC_EXCEEDED, "PF_NPROC_EXCEEDED", "NPX"},
-    { PF_USED_MATH,      "PF_USED_MATH"  , "MATH"},
-    { PF_USED_ASYNC,     "PF_USED_ASYNC" , "ASYNC"},
-    { PF_NOFREEZE,       "PF_NOFREEZE"   , "NFREZ"},
-    { PF_FROZEN,         "PF_FROZEN"     , "FROZ"},
-    { PF_FSTRANS,        "PF_FSTRANS"    , "FSX"},
-    { PF_KSWAPD,         "PF_KSWAPD"     , "KSWP"},
-    { PF_MEMALLOC_NOIO,  "PF_MEMALLOC_NOIO", "MEMN"},
-    { PF_LESS_THROTTLE,  "PF_LESS_THROTTLE", "LTHR"},
-    { PF_KTHREAD,        "PF_KTHREAD"    , "KTHED"},
-    { PF_RANDOMIZE,      "PF_RANDOMIZE"  , "R" },
-    { PF_SWAPWRITE,      "PF_SWAPWRITE"  , "SWAPW"},
-    { PF_NO_SETAFFINITY, "PF_NO_SETAFFINITY", "NSAF"},
-    { PF_MCE_EARLY,      "PF_MCE_EARLY"  , "MCEAR"},
-    { PF_MUTEX_TESTER,   "PF_MUTEX_TESTER", "MUTST"},
-    { PF_FREEZER_SKIP,   "PF_FREEZER_SKIP", "FRESP"},
-    { PF_SUSPEND_TASK,   "PF_SUSPEND_TASK", "SUSD" },
-    { 0,                 NULL             }
-};
+static unsigned long track_pid = 0;
 
 /**
- * Decode flag
+ * Decode state
  */
 static void
-decode_flag (unsigned int flags, char *buffer)
+decode_state (long state, char *buffer)
 {
     int ii = 0;
-    struct flag_table_t *flag_item = NULL;
+    int jj = 0;
     char *p = buffer;
+    long mask = 1;
 
-    for (flag_item = flag_table, ii = 0;
-         flag_item->flags;
-         flag_item = &flag_table[++ii]) {
-        if (flags & flag_item->flags) {
-            p = buffer +  strlen(buffer);
-            snprintf(p, BUF_SZ - strlen(buffer), "%s,",flag_item->flag_str);
+    if (state == TASK_RUNNING) {
+        p[jj++] = TASK_STATE_TO_CHAR_STR[0];
+    } else {
+        for (ii = 1; ii < 11; mask *= 2, ii++) {
+            if (state & mask) {
+                p[jj++] = TASK_STATE_TO_CHAR_STR[ii];
+            }
         }
     }
 
-    buffer[strlen(buffer) - 1] = '\0';
+    p[jj] = '\0';
 }
 
 /**
@@ -98,7 +70,6 @@ ct_seq_start (struct seq_file *s, loff_t *pos)
             } else {
                 buffer = (char *) s->private;
                 buffer[0] = '\0';
-                decode_flag(task->flags, buffer);
             }
             spos = (void *) task;
             *pos = 0;
@@ -126,7 +97,6 @@ ct_seq_next (struct seq_file *s, void *v, loff_t *pos)
         spos = (void *)next_task;
         buffer = (char *) s->private;
         buffer[0] = '\0';
-        decode_flag(task->flags, buffer);
     }
 
     return spos;
@@ -146,9 +116,16 @@ static int
 ct_seq_show (struct seq_file *s, void *v)
 {
     struct task_struct *task = (struct task_struct *) v;
-    seq_printf(s, "PID:%5d:", task->pid);
-    seq_puts(s, (char *) s->private);
-    seq_printf(s, "\n");
+    if (task->pid == track_pid) {
+        decode_state(task->state, s->private);
+        seq_printf(s, "PID (%6d) State: ", task->pid);
+        seq_putc(s, '(');
+        seq_puts(s, (char *) s->private);
+        seq_putc(s, ')');
+        seq_printf(s, ",Prio: (%d)", task->prio);
+        seq_printf(s, ",RT-Prio: (%d)", task->rt_priority);
+        seq_printf(s, "\n");
+    }
     return 0;
 }
 
@@ -165,9 +142,35 @@ ct_open (struct inode *inode, struct file *file)
     return seq_open(file, &ct_seq_ops);
 }
 
+static ssize_t
+ct_write (struct file *file, const char __user *buf,
+          size_t count, loff_t *ppos)
+{
+    ssize_t retval;
+    long pid = 0;
+    size_t length = (count > LOCAL_BUF_SZ) ? LOCAL_BUF_SZ : count;
+    char *lbuf = (char *) vmalloc (sizeof (char) * (LOCAL_BUF_SZ + 1));
+    memset(lbuf, 0, (LOCAL_BUF_SZ + 1));
+    /* This function is to chew up all the input data */
+
+    copy_from_user(lbuf, buf, length);
+
+    if (kstrtol(lbuf, 10, &pid) == 0) {
+        printk(KERN_ERR "Get pid: '%ld'", pid);
+        track_pid = (unsigned long) pid;
+    } else {
+        printk(KERN_ERR "Invalid PID with string '%s'\n", lbuf);
+    }
+    vfree(lbuf);
+    lbuf = NULL;
+    retval = count;
+    return retval;
+}
+
 static struct file_operations ct_file_ops = {
     .owner      = THIS_MODULE,
     .open       = ct_open,
+    .write      = ct_write,
     .read       = seq_read,
     .llseek     = seq_lseek,
     .release    = seq_release
@@ -183,6 +186,7 @@ ct_init (void)
     struct proc_dir_entry *entry;
 
     entry = proc_create("myps", 0777, NULL, &ct_file_ops);
+    track_pid = 0;
 
     return 0;
 }

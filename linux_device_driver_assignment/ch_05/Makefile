@@ -1,6 +1,7 @@
 OBJ1 := main
 OBJ2 := proc
 OBJ3 := device
+OBJ4 := myps
 LDDM := CDDAMA
 
 #  create one .o .. from multiple .o files
@@ -10,8 +11,8 @@ obj-m := $(LDDM).o
 $(LDDM)-objs := \
     $(OBJ1).o \
     $(OBJ2).o \
-    $(OBJ3).o
-    
+    $(OBJ3).o \
+    $(OBJ4).o
 
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
@@ -38,12 +39,15 @@ clean:
 	    $(OBJ1).*o \
 	    $(OBJ2).*o \
 	    $(OBJ3).*o \
+	    $(OBJ4).*o \
 	    $(OBJ1).*.* \
 	    .$(OBJ1).* \
 	    $(OBJ2).*.* \
 	    .$(OBJ2).* \
 	    $(OBJ3).*.* \
 	    .$(OBJ3).* \
+	    $(OBJ4).*.* \
+	    .$(OBJ4).* \
 	    .tmp_versions* [mM]odule*
 
 mem:

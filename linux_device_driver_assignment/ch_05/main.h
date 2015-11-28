@@ -4,6 +4,7 @@
 #define CDD		"CDDAMA"
 #define CDDNUMDEVS	6	// 2.6
 #define BUF_SZ          4095
+#define LOCAL_BUF_SZ    1041
 
 typedef struct _CDD_CONTEXT_T {
     int count;
@@ -23,6 +24,8 @@ int proc_file_create (void);
 void proc_file_destroy (void);
 int device_init (void);
 void device_exit (void);
+int ct_init (void);
+void ct_exit (void);
 void CDD_get_stats (CDD_STATS_T *stats);
 
 #endif/*__MAIN_H__*/
