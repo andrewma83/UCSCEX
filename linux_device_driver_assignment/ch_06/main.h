@@ -20,13 +20,20 @@ typedef struct _CDD_STATS_T {
     int num_open;
 } CDD_STATS_T;
 
+enum {
+    BUF_16=0,
+    BUF_64,
+    BUF_128,
+    BUF_256
+};
+
 int proc_file_create (void);
 void proc_file_destroy (void);
 int device_init (void);
 void device_exit (void);
 int ct_init (void);
 void ct_exit (void);
-void CDD_get_stats (CDD_STATS_T *stats);
+void CDD_get_stats (CDD_STATS_T *stats, int type);
 extern int buf_type [];
 
 #endif/*__MAIN_H__*/

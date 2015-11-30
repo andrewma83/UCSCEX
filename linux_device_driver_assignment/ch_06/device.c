@@ -35,7 +35,7 @@ static struct class *CDD_class;
 struct cdev cdev;
 dev_t devno;
 
-static CDD_CONTEXT_T context;
+static CDD_CONTEXT_T context[CDDNUMDEVS];
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
 	module_param(CDDMajor,int,0);
@@ -46,33 +46,34 @@ static CDD_CONTEXT_T context;
 #endif
 
 void
-CDD_get_stats (CDD_STATS_T *stats)
+CDD_get_stats (CDD_STATS_T *stats, int type)
 {
-    stats->alloc_sz = BUF_SZ;
-    stats->used_sz = context.count;
-    spin_lock(&context.sp);
-    stats->num_open = context.num_open;
-    spin_unlock(&context.sp);
+    stats->alloc_sz = buf_type[type];
+    stats->used_sz = context[type].count;
+    spin_lock(&context[type].sp);
+    stats->num_open = context[type].num_open;
+    spin_unlock(&context[type].sp);
 
 }
 
 static int
 CDD_open (struct inode *inode, struct file *file)
 {
+    int type = iminor(file->f_path.dentry->d_inode);
     // MOD_INC_USE_COUNT;
     if (file->f_flags & O_TRUNC) {
-	context.count = 0;
-	context.storage[0] = '\0';
+	context[type].count = 0;
+	context[type].storage[0] = '\0';
     }
 
     if (file->f_flags & O_APPEND) {
-	file->f_pos = context.count;
+	file->f_pos = context[type].count;
     }
 
-    file->private_data = (void *) &context;
-    spin_lock(&context.sp);
-    context.num_open++;
-    spin_unlock(&context.sp);
+    file->private_data = (void *) &context[type];
+    spin_lock(&context[type].sp);
+    context[type].num_open++;
+    spin_unlock(&context[type].sp);
     return 0;
 }
 
@@ -96,6 +97,7 @@ CDD_read (struct file *file, char *buf, size_t count, loff_t * ppos)
     int len = 0, err = 0;
     CDD_CONTEXT_T *ctx = (CDD_CONTEXT_T *) file->private_data;
     char *CDD_storage = ctx->storage;
+    int type = iminor(file->f_path.dentry->d_inode);
 
     do {
 
@@ -114,11 +116,11 @@ CDD_read (struct file *file, char *buf, size_t count, loff_t * ppos)
 	}
 
         printk(KERN_ALERT "CDD_read ready for down\n");
-        down(&context.mutex_lock);
+        down(&context[type].mutex_lock);
         printk(KERN_ALERT "CDD_read down\n");
 	err = copy_to_user (buf, &CDD_storage[*ppos], len);
         printk(KERN_ALERT "CDD_read ready for up\n");
-        up(&context.mutex_lock);
+        up(&context[type].mutex_lock);
         printk(KERN_ALERT "CDD_read up\n");
 
 	if (err != 0) {
@@ -143,6 +145,7 @@ CDD_write (struct file *file, const char *buf, size_t count, loff_t * ppos)
     int err;
     CDD_CONTEXT_T *ctx = (CDD_CONTEXT_T *) file->private_data;
     char *CDD_storage = ctx->storage;
+    int type = iminor(file->f_path.dentry->d_inode);
 
     do {
         /* Won't write if it is read only */
@@ -161,11 +164,11 @@ CDD_write (struct file *file, const char *buf, size_t count, loff_t * ppos)
 	}
 
         printk(KERN_ALERT "CDD_write ready for down\n");
-        down(&context.mutex_lock);
+        down(&context[type].mutex_lock);
         printk(KERN_ALERT "CDD_write down\n");
 	err = copy_from_user (&CDD_storage[*ppos], buf, count);
         printk(KERN_ALERT "CDD_write ready for up\n");
-        up(&context.mutex_lock);
+        up(&context[type].mutex_lock);
         printk(KERN_ALERT "CDD_write up\n");
 	if (err != 0) {
 	    count = -EFAULT;
@@ -181,19 +184,20 @@ CDD_write (struct file *file, const char *buf, size_t count, loff_t * ppos)
 }
 
 static loff_t
-CDD_llseek (struct file *filp, loff_t off, int whence)
+CDD_llseek (struct file *file, loff_t off, int whence)
 {
     loff_t newpos;
+    int type = iminor(file->f_path.dentry->d_inode);
 
     switch (whence) {
     case 0:
 	newpos = off;
 	break;
     case 1:
-	newpos = filp->f_pos + off;
+	newpos = file->f_pos + off;
 	break;
     case 2:
-	newpos = context.count + off;
+	newpos = context[type].count + off;
 	break;
     default:
 	return -EINVAL;
@@ -203,7 +207,7 @@ CDD_llseek (struct file *filp, loff_t off, int whence)
 	return -EINVAL;
     }
 
-    filp->f_pos = newpos;
+    file->f_pos = newpos;
     return newpos;
 }
 
@@ -268,17 +272,29 @@ device_init (void)
     int i = 0;
     int ii = 0;
     char device_name[LOCAL_BUF_SZ + 1];
+    int success = 0;
 
     do {
 	memset (&context, 0, sizeof (CDD_CONTEXT_T));
-	context.storage = (char *) vmalloc ((BUF_SZ + 1) * sizeof (char));
-        sema_init(&context.mutex_lock, 1);
-        spin_lock_init(&context.sp);
-	if (context.storage == NULL) {
-	    i = -EINVAL;
-	    printk (KERN_ALERT "Cannot allocate memory for storage");
-	    break;
-	}
+        for (ii = 0, success = 1; ii < CDDNUMDEVS; ii++) {
+	    context[ii].storage = (char *) vmalloc (buf_type[ii] * sizeof (char));
+            if (context[ii].storage == NULL) {
+                success = 0;
+                break;
+            }
+
+            sema_init(&context[ii].mutex_lock, 1);
+            spin_lock_init(&context[ii].sp);
+        }
+
+        if (!success) {
+            if (context[ii].storage == NULL) {
+                i = -EINVAL;
+                printk (KERN_ALERT "Cannot allocate memory for storage");
+                break;
+            }           
+        }
+
 
 	if (CDDMajor) {
 	    //  Step 1a of 2:  create/populate device numbers
@@ -353,5 +369,7 @@ device_exit (void)
     unregister_chrdev_region (devno, CDDNUMDEVS);
 
     //  Step 5 of 5: Release memory
-    vfree (context.storage);
+    for (ii = 0; ii < CDDNUMDEVS; ii++) {
+        vfree (context[ii].storage);
+    }
 }

@@ -31,13 +31,13 @@ static struct proc_dir_entry *proc_dir;
 static struct proc_dir_entry *proc_stats[CDDNUMDEVS];
 
 static void
-prepare_display_buffer (void) 
+prepare_display_buffer (int type) 
 {
     int len = 0;
     ssize_t unused_buf_sz = 0;
     CDD_STATS_T stats;
 
-    CDD_get_stats(&stats);
+    CDD_get_stats(&stats, type);
     unused_buf_sz = stats.alloc_sz - stats.used_sz;
     memset(display_buffer.buf, 0, BUF_SZ);
 
@@ -62,14 +62,14 @@ prepare_display_buffer (void)
 }
 
 static ssize_t
-proc_file_read (struct file *file, char __user *buf, 
-                size_t len, loff_t *ppos)
+proc_file_read_core (struct file *file, char __user *buf, 
+                     size_t len, loff_t *ppos, int type)
 {
     int copy_len = 0;
     int act_copy_len = 0;
 
     if (*ppos == 0) {
-        prepare_display_buffer();
+        prepare_display_buffer(type);
     }
 
     copy_len = strlen(display_buffer.buf + *ppos);
@@ -89,6 +89,34 @@ proc_file_read (struct file *file, char __user *buf,
 }
 
 static ssize_t
+proc_file_read_16 (struct file *file, char __user *buf, 
+                   size_t len, loff_t *ppos)
+{
+    return proc_file_read_core(file, buf, len, ppos, BUF_16);
+}
+
+static ssize_t
+proc_file_read_64 (struct file *file, char __user *buf, 
+                   size_t len, loff_t *ppos)
+{
+    return proc_file_read_core(file, buf, len, ppos, BUF_64);
+}
+
+static ssize_t
+proc_file_read_128 (struct file *file, char __user *buf, 
+                    size_t len, loff_t *ppos)
+{
+    return proc_file_read_core(file, buf, len, ppos, BUF_128);
+}
+
+static ssize_t
+proc_file_read_256 (struct file *file, char __user *buf, 
+                    size_t len, loff_t *ppos)
+{
+    return proc_file_read_core(file, buf, len, ppos, BUF_256);
+}
+
+static ssize_t
 proc_file_write (struct file *file, const char __user *buf,
                  size_t count, loff_t *ppos)
 {
@@ -100,10 +128,27 @@ proc_file_write (struct file *file, const char __user *buf,
     return retval;
 }
 
-static const struct file_operations proc_fops = {
-    .owner = THIS_MODULE,
-    .read  = proc_file_read,
-    .write = proc_file_write,
+static const struct file_operations proc_fops[] = {
+    {
+        .owner = THIS_MODULE,
+        .read  = proc_file_read_16,
+        .write = proc_file_write,
+    },
+    {
+        .owner = THIS_MODULE,
+        .read  = proc_file_read_64,
+        .write = proc_file_write,
+    },
+    {
+        .owner = THIS_MODULE,
+        .read  = proc_file_read_128,
+        .write = proc_file_write,
+    },
+    {
+        .owner = THIS_MODULE,
+        .read  = proc_file_read_256,
+        .write = proc_file_write,
+    }
 };
 
 int
@@ -116,7 +161,7 @@ proc_file_create (void)
         proc_dir = proc_mkdir("CDD", 0);
         for (ii = 0; ii < CDDNUMDEVS; ii++) {
             snprintf(device_name, LOCAL_BUF_SZ, "CDD%d", buf_type[ii]);
-            proc_stats[ii] = proc_create(device_name, 0777, proc_dir, &proc_fops);
+            proc_stats[ii] = proc_create(device_name, 0777, proc_dir, &proc_fops[ii]);
         }
 
         display_buffer.buf = vmalloc ((BUF_SZ + 1) * sizeof (char));
