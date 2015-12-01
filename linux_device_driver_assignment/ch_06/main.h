@@ -33,7 +33,7 @@ int device_init (void);
 void device_exit (void);
 int ct_init (void);
 void ct_exit (void);
-void CDD_get_stats (CDD_STATS_T *stats, int type);
+void CDD_get_stats (CDD_STATS_T *stats, int index);
 extern int buf_type [];
 
 #endif/*__MAIN_H__*/

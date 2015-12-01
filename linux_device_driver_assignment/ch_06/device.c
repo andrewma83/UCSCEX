@@ -46,34 +46,34 @@ static CDD_CONTEXT_T context[CDDNUMDEVS];
 #endif
 
 void
-CDD_get_stats (CDD_STATS_T *stats, int type)
+CDD_get_stats (CDD_STATS_T *stats, int index)
 {
-    stats->alloc_sz = buf_type[type];
-    stats->used_sz = context[type].count;
-    spin_lock(&context[type].sp);
-    stats->num_open = context[type].num_open;
-    spin_unlock(&context[type].sp);
+    stats->alloc_sz = buf_type[index];
+    stats->used_sz = context[index].count;
+    spin_lock(&context[index].sp);
+    stats->num_open = context[index].num_open;
+    spin_unlock(&context[index].sp);
 
 }
 
 static int
 CDD_open (struct inode *inode, struct file *file)
 {
-    int type = iminor(file->f_path.dentry->d_inode);
+    int index= iminor(file->f_path.dentry->d_inode);
     // MOD_INC_USE_COUNT;
     if (file->f_flags & O_TRUNC) {
-	context[type].count = 0;
-	context[type].storage[0] = '\0';
+	context[index].count = 0;
+	context[index].storage[0] = '\0';
     }
 
     if (file->f_flags & O_APPEND) {
-	file->f_pos = context[type].count;
+	file->f_pos = context[index].count;
     }
 
-    file->private_data = (void *) &context[type];
-    spin_lock(&context[type].sp);
-    context[type].num_open++;
-    spin_unlock(&context[type].sp);
+    file->private_data = (void *) &context[index];
+    spin_lock(&context[index].sp);
+    context[index].num_open++;
+    spin_unlock(&context[index].sp);
     return 0;
 }
 
@@ -97,7 +97,7 @@ CDD_read (struct file *file, char *buf, size_t count, loff_t * ppos)
     int len = 0, err = 0;
     CDD_CONTEXT_T *ctx = (CDD_CONTEXT_T *) file->private_data;
     char *CDD_storage = ctx->storage;
-    int type = iminor(file->f_path.dentry->d_inode);
+    int index = iminor(file->f_path.dentry->d_inode);
 
     do {
 
@@ -116,11 +116,11 @@ CDD_read (struct file *file, char *buf, size_t count, loff_t * ppos)
 	}
 
         printk(KERN_ALERT "CDD_read ready for down\n");
-        down(&context[type].mutex_lock);
+        down(&context[index].mutex_lock);
         printk(KERN_ALERT "CDD_read down\n");
 	err = copy_to_user (buf, &CDD_storage[*ppos], len);
         printk(KERN_ALERT "CDD_read ready for up\n");
-        up(&context[type].mutex_lock);
+        up(&context[index].mutex_lock);
         printk(KERN_ALERT "CDD_read up\n");
 
 	if (err != 0) {
@@ -145,7 +145,7 @@ CDD_write (struct file *file, const char *buf, size_t count, loff_t * ppos)
     int err;
     CDD_CONTEXT_T *ctx = (CDD_CONTEXT_T *) file->private_data;
     char *CDD_storage = ctx->storage;
-    int type = iminor(file->f_path.dentry->d_inode);
+    int index = iminor(file->f_path.dentry->d_inode);
 
     do {
         /* Won't write if it is read only */
@@ -155,7 +155,7 @@ CDD_write (struct file *file, const char *buf, size_t count, loff_t * ppos)
 	}
 
         /* If Projected length is greater than the total buffer size */
-	if ((*ppos + count) > BUF_SZ) {
+	if ((*ppos + count) > buf_type[index]) {
 	    count = BUF_SZ - *ppos;
 	    if (count <= 0) {
 		count = -EFAULT;
@@ -164,11 +164,11 @@ CDD_write (struct file *file, const char *buf, size_t count, loff_t * ppos)
 	}
 
         printk(KERN_ALERT "CDD_write ready for down\n");
-        down(&context[type].mutex_lock);
+        down(&context[index].mutex_lock);
         printk(KERN_ALERT "CDD_write down\n");
 	err = copy_from_user (&CDD_storage[*ppos], buf, count);
         printk(KERN_ALERT "CDD_write ready for up\n");
-        up(&context[type].mutex_lock);
+        up(&context[index].mutex_lock);
         printk(KERN_ALERT "CDD_write up\n");
 	if (err != 0) {
 	    count = -EFAULT;
@@ -187,7 +187,7 @@ static loff_t
 CDD_llseek (struct file *file, loff_t off, int whence)
 {
     loff_t newpos;
-    int type = iminor(file->f_path.dentry->d_inode);
+    int index = iminor(file->f_path.dentry->d_inode);
 
     switch (whence) {
     case 0:
@@ -197,7 +197,7 @@ CDD_llseek (struct file *file, loff_t off, int whence)
 	newpos = file->f_pos + off;
 	break;
     case 2:
-	newpos = context[type].count + off;
+	newpos = context[index].count + off;
 	break;
     default:
 	return -EINVAL;
