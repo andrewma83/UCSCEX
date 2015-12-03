@@ -220,6 +220,14 @@ CDD_ioctl (struct file *file, unsigned int cmd, unsigned long arg)
 
     index = index; //pacify unused variable
 
+    switch (cmd) {
+    case CMD1:
+        break;
+    case CMD2:
+        break;
+    case CMD3:
+        break;
+    }
 
     return retval;
 }
