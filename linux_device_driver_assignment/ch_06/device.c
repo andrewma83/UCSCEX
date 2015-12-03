@@ -220,29 +220,39 @@ CDD_ioctl (struct file *file, unsigned int cmd, unsigned long arg)
     int index = iminor(file->f_path.dentry->d_inode);
     char local_buf[LOCAL_BUF_SZ + 1];
     char __user *buf = (char *) arg;
+    int success = 1;
 
-    memset(&stats, 0, sizeof (CDD_STATS_T));
-    CDD_get_stats(&stats, index);
+    if (arg) {
+        memset(&stats, 0, sizeof (CDD_STATS_T));
+        CDD_get_stats(&stats, index);
 
-    switch (cmd) {
-    case CMD1:
-        snprintf(local_buf, LOCAL_BUF_SZ,
-                 "Number of open(): %d",
-                 stats.num_open);
-        break;
-    case CMD2:
-        snprintf(local_buf, LOCAL_BUF_SZ,
-                 "Buffer Length - Allocated: %lu",
-                 stats.alloc_sz);
-        break;
-    case CMD3:
-        snprintf(local_buf, LOCAL_BUF_SZ,
-                 "Buffer Length - Used: %lu",
-                 stats.used_sz);
-        break;
+        switch (cmd) {
+        case CMD1:
+            snprintf(local_buf, LOCAL_BUF_SZ,
+                     "Number of open(): %d",
+                     stats.num_open);
+            break;
+        case CMD2:
+            snprintf(local_buf, LOCAL_BUF_SZ,
+                     "Buffer Length - Allocated: %lu",
+                     stats.alloc_sz);
+            break;
+        case CMD3:
+            snprintf(local_buf, LOCAL_BUF_SZ,
+                     "Buffer Length - Used: %lu",
+                     stats.used_sz);
+            break;
+        default:
+            success = 0;
+            break;
+        }
+
+        if (success) {
+            copy_to_user(buf, local_buf, LOCAL_BUF_SZ);
+        }
     }
 
-    copy_to_user(buf, local_buf, LOCAL_BUF_SZ);
+
     return retval;
 }
 
