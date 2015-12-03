@@ -216,19 +216,33 @@ static long
 CDD_ioctl (struct file *file, unsigned int cmd, unsigned long arg)
 {
     int retval = 0;
+    CDD_STATS_T stats;
     int index = iminor(file->f_path.dentry->d_inode);
+    char local_buf[LOCAL_BUF_SZ + 1];
+    char __user *buf = (char *) arg;
 
-    index = index; //pacify unused variable
+    memset(&stats, 0, sizeof (CDD_STATS_T));
+    CDD_get_stats(&stats, index);
 
     switch (cmd) {
     case CMD1:
+        snprintf(local_buf, LOCAL_BUF_SZ,
+                 "Number of open(): %d",
+                 stats.num_open);
         break;
     case CMD2:
+        snprintf(local_buf, LOCAL_BUF_SZ,
+                 "Buffer Length - Allocated: %lu",
+                 stats.alloc_sz);
         break;
     case CMD3:
+        snprintf(local_buf, LOCAL_BUF_SZ,
+                 "Buffer Length - Used: %lu",
+                 stats.used_sz);
         break;
     }
 
+    copy_to_user(buf, local_buf, LOCAL_BUF_SZ);
     return retval;
 }
 
