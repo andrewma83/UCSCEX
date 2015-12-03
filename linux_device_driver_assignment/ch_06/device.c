@@ -27,6 +27,7 @@
 #include <linux/spinlock.h>
 #include <asm/uaccess.h>
 #include "main.h"
+#include "ioctl_code.h"
 
 static unsigned int CDDMajor = 0;
 static unsigned int CDDMinor = 0;
@@ -211,6 +212,19 @@ CDD_llseek (struct file *file, loff_t off, int whence)
     return newpos;
 }
 
+static long
+CDD_ioctl (struct file *file, unsigned int cmd, unsigned long arg)
+{
+    int retval = 0;
+    int index = iminor(file->f_path.dentry->d_inode);
+
+    index = index; //pacify unused variable
+
+
+    return retval;
+}
+
+
 static struct file_operations CDD_fops = {
     // for LINUX_VERSION_CODE 2.4.0 and later 
   owner:THIS_MODULE,		// struct module *owner
@@ -218,7 +232,8 @@ static struct file_operations CDD_fops = {
   read:CDD_read,		// read method 
   write:CDD_write,		// write method 
   release:CDD_release,		// release method .. for close() system call
-  llseek:CDD_llseek
+  llseek:CDD_llseek,
+  unlocked_ioctl:CDD_ioctl
 };
 
 static struct CDDdev {
