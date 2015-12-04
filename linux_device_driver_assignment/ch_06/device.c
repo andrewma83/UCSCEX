@@ -72,6 +72,8 @@ CDD_open (struct inode *inode, struct file *file)
     if (file->f_flags & O_APPEND) {
 	file->f_pos = context[index].count;
     }
+
+    context[index].poll_mask |= (POLLOUT | POLLWRNORM);
     up(&context[index].mutex_lock);
 
     file->private_data = (void *) &context[index];
@@ -114,9 +116,13 @@ CDD_read (struct file *file, char *buf, size_t count, loff_t * ppos)
 	    len = -EFAULT;
 	    break;
 	} else if (len == 0) {
+            /* Unset the poll read flag */
+            ctx->poll_mask &= ~(POLLIN | POLLRDNORM);
 	    break;
 	} else if (len > count) {
 	    len = count;
+            /* Unset the poll read flag */
+            ctx->poll_mask &= ~(POLLIN | POLLRDNORM);
 	}
 
         printk(KERN_ALERT "CDD_read ready for down\n");
@@ -160,11 +166,16 @@ CDD_write (struct file *file, const char *buf, size_t count, loff_t * ppos)
 
         /* If Projected length is greater than the total buffer size */
 	if ((*ppos + count) > buf_type[index]) {
-	    count = BUF_SZ - *ppos;
+	    count = buf_type[index] - *ppos;
 	    if (count <= 0) {
 		count = -EFAULT;
+                /* Unset the poll write flag */
+                ctx->poll_mask &= ~(POLLOUT | POLLWRNORM);
 		break;
-	    }
+            } else {
+                /* Set something read to read */
+                ctx->poll_mask |= POLLIN | POLLRDNORM;
+            }
 	}
 
         printk(KERN_ALERT "CDD_write ready for down\n");
@@ -209,7 +220,14 @@ CDD_llseek (struct file *file, loff_t off, int whence)
 
     if (newpos < 0) {
 	return -EINVAL;
+    } else if (newpos >= buf_type[index]) {
+        context[index].poll_mask &= ~(POLLOUT | POLLWRNORM);
+        context[index].poll_mask &= ~(POLLIN | POLLRDNORM);
+    } else {
+        context[index].poll_mask |= (POLLOUT | POLLWRNORM);
+        context[index].poll_mask |= (POLLIN | POLLRDNORM);
     }
+
 
     file->f_pos = newpos;
     return newpos;
@@ -265,8 +283,11 @@ CDD_poll (struct file *file, struct poll_table_struct *polltbl)
     unsigned mask = 0;
     int index = iminor(file->f_path.dentry->d_inode);
 
-    mask |= POLLIN | POLLRDNORM;
-    mask |= POLLOUT | POLLWRNORM;
+    /**
+     * mask |= POLLIN | POLLRDNORM;
+     * mask |= POLLOUT | POLLWRNORM;
+     */
+    mask = context[index].poll_mask;
 
     return mask;
 }
