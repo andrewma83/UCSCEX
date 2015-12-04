@@ -25,6 +25,7 @@
 #include <linux/proc_fs.h>
 #include <linux/semaphore.h>
 #include <linux/spinlock.h>
+#include <linux/poll.h>
 #include <asm/uaccess.h>
 #include "main.h"
 #include "ioctl_code.h"
@@ -258,6 +259,17 @@ CDD_ioctl (struct file *file, unsigned int cmd, unsigned long arg)
     return retval;
 }
 
+static unsigned int
+CDD_poll (struct file *file, struct poll_table_struct *polltbl)
+{
+    unsigned mask = 0;
+    int index = iminor(file->f_path.dentry->d_inode);
+
+    mask |= POLLIN | POLLRDNORM;
+    mask |= POLLOUT | POLLWRNORM;
+
+    return mask;
+}
 
 static struct file_operations CDD_fops = {
     // for LINUX_VERSION_CODE 2.4.0 and later 
@@ -267,6 +279,7 @@ static struct file_operations CDD_fops = {
   write:CDD_write,		// write method 
   release:CDD_release,		// release method .. for close() system call
   llseek:CDD_llseek,
+  poll:CDD_poll,
   unlocked_ioctl:CDD_ioctl
 };
 
