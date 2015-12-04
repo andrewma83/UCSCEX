@@ -48,6 +48,7 @@ clean:
 	    .$(OBJ3).* \
 	    $(OBJ4).*.* \
 	    .$(OBJ4).* \
+	    CDD2app \
 	    .tmp_versions* [mM]odule*
 
 mem:

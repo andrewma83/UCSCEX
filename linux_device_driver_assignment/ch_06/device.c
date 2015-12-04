@@ -60,8 +60,9 @@ CDD_get_stats (CDD_STATS_T *stats, int index)
 static int
 CDD_open (struct inode *inode, struct file *file)
 {
-    int index= iminor(file->f_path.dentry->d_inode);
+    int index = iminor(file->f_path.dentry->d_inode);
     // MOD_INC_USE_COUNT;
+    down(&context[index].mutex_lock);
     if (file->f_flags & O_TRUNC) {
 	context[index].count = 0;
 	context[index].storage[0] = '\0';
@@ -70,6 +71,7 @@ CDD_open (struct inode *inode, struct file *file)
     if (file->f_flags & O_APPEND) {
 	file->f_pos = context[index].count;
     }
+    up(&context[index].mutex_lock);
 
     file->private_data = (void *) &context[index];
     spin_lock(&context[index].sp);
