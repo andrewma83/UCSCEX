@@ -193,13 +193,13 @@ CDD_llseek (struct file *file, loff_t off, int whence)
     int index = iminor(file->f_path.dentry->d_inode);
 
     switch (whence) {
-    case 0:
+    case SEEK_SET:
 	newpos = off;
 	break;
-    case 1:
+    case SEEK_CUR:
 	newpos = file->f_pos + off;
 	break;
-    case 2:
+    case SEEK_END:
 	newpos = context[index].count + off;
 	break;
     default:
