@@ -20,6 +20,14 @@ typedef struct _CDD_STATS_T {
     int num_open;
 } CDD_STATS_T;
 
+typedef struct _CDD_TIME_STATS_T {
+    unsigned long int start_jiffies;
+    unsigned long long int start_timetick;
+    unsigned long int end_jiffies;
+    unsigned long long int end_timetick;
+    unsigned int cpu;
+} CDD_TIME_STATS_T;
+
 int proc_file_create (void);
 void proc_file_destroy (void);
 int device_init (void);

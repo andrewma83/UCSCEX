@@ -17,6 +17,7 @@
 #include <linux/moduleparam.h>
 #include <linux/sched.h>
 #include <linux/proc_fs.h>
+#include <linux/jiffies.h>
 #include <asm/uaccess.h>
 #include "main.h"
 
@@ -30,14 +31,39 @@ DISPLAY_BUF_T display_buffer;
 static struct proc_dir_entry *proc_dir;
 static struct proc_dir_entry *proc_stats;
 
+#define DELAYTIMEINSECS         1
+static void
+CDD_get_time_stats (CDD_TIME_STATS_T *time_stats)
+{
+    int ii;
+    unsigned long long int startll, endll;
+    unsigned long long int elasped_time_cycle;
+
+    time_stats->start_jiffies = jiffies;
+    time_stats->end_jiffies = jiffies + DELAYTIMEINSECS * HZ;
+    rdtscll(startll);
+    while (time_before(jiffies, time_stats->end_jiffies)) {}
+    rdtscll(endll);
+
+    elasped_time_cycle = endll - startll;
+    time_stats->cpu = elasped_time_cycle;
+    /* Convert it into Ghz */
+    for (ii = 0; ii < 9; ii++ ) {
+        time_stats->cpu /= 10;
+    }
+}
+
 static void
 prepare_display_buffer (void) 
 {
     int len = 0;
     ssize_t unused_buf_sz = 0;
     CDD_STATS_T stats;
+    CDD_TIME_STATS_T time_stats;
 
+    memset(&time_stats, 0, sizeof (CDD_TIME_STATS_T));
     CDD_get_stats(&stats);
+    CDD_get_time_stats(&time_stats);
     unused_buf_sz = stats.alloc_sz - stats.used_sz;
     memset(display_buffer.buf, 0, BUF_SZ);
 
@@ -59,6 +85,8 @@ prepare_display_buffer (void)
     len += snprintf (display_buffer.buf + len, BUF_SZ - len,
                      "Number of open files     : %d\n", stats.num_open);
 
+    len += snprintf (display_buffer.buf + len, BUF_SZ - len,
+                     "CPU Speed as             : %uGhz\n", time_stats.cpu);
 }
 
 static ssize_t
