@@ -17,7 +17,6 @@
 #include <linux/moduleparam.h>
 #include <linux/sched.h>
 #include <linux/proc_fs.h>
-#include <linux/jiffies.h>
 #include <asm/uaccess.h>
 #include "main.h"
 
@@ -29,41 +28,16 @@ typedef struct _display_buf_t {
 DISPLAY_BUF_T display_buffer;
 
 static struct proc_dir_entry *proc_dir;
-static struct proc_dir_entry *proc_stats;
-
-#define DELAYTIMEINSECS         1
-static void
-CDD_get_time_stats (CDD_TIME_STATS_T *time_stats)
-{
-    int ii;
-    unsigned long long int startll, endll;
-    unsigned long long int elasped_time_cycle;
-
-    time_stats->start_jiffies = jiffies;
-    time_stats->end_jiffies = jiffies + DELAYTIMEINSECS * HZ;
-    rdtscll(startll);
-    while (time_before(jiffies, time_stats->end_jiffies)) {}
-    rdtscll(endll);
-
-    elasped_time_cycle = endll - startll;
-    time_stats->cpu = elasped_time_cycle;
-    /* Convert it into Ghz */
-    for (ii = 0; ii < 9; ii++ ) {
-        time_stats->cpu /= 10;
-    }
-}
+static struct proc_dir_entry *proc_stats[CDDNUMDEVS];
 
 static void
-prepare_display_buffer (void) 
+prepare_display_buffer (int type) 
 {
     int len = 0;
     ssize_t unused_buf_sz = 0;
     CDD_STATS_T stats;
-    CDD_TIME_STATS_T time_stats;
 
-    memset(&time_stats, 0, sizeof (CDD_TIME_STATS_T));
-    CDD_get_stats(&stats);
-    CDD_get_time_stats(&time_stats);
+    CDD_get_stats(&stats, type);
     unused_buf_sz = stats.alloc_sz - stats.used_sz;
     memset(display_buffer.buf, 0, BUF_SZ);
 
@@ -85,19 +59,17 @@ prepare_display_buffer (void)
     len += snprintf (display_buffer.buf + len, BUF_SZ - len,
                      "Number of open files     : %d\n", stats.num_open);
 
-    len += snprintf (display_buffer.buf + len, BUF_SZ - len,
-                     "CPU Speed as             : %uGhz\n", time_stats.cpu);
 }
 
 static ssize_t
-proc_file_read (struct file *file, char __user *buf, 
-                size_t len, loff_t *ppos)
+proc_file_read_core (struct file *file, char __user *buf, 
+                     size_t len, loff_t *ppos, int type)
 {
     int copy_len = 0;
     int act_copy_len = 0;
 
     if (*ppos == 0) {
-        prepare_display_buffer();
+        prepare_display_buffer(type);
     }
 
     copy_len = strlen(display_buffer.buf + *ppos);
@@ -117,6 +89,34 @@ proc_file_read (struct file *file, char __user *buf,
 }
 
 static ssize_t
+proc_file_read_16 (struct file *file, char __user *buf, 
+                   size_t len, loff_t *ppos)
+{
+    return proc_file_read_core(file, buf, len, ppos, BUF_16);
+}
+
+static ssize_t
+proc_file_read_64 (struct file *file, char __user *buf, 
+                   size_t len, loff_t *ppos)
+{
+    return proc_file_read_core(file, buf, len, ppos, BUF_64);
+}
+
+static ssize_t
+proc_file_read_128 (struct file *file, char __user *buf, 
+                    size_t len, loff_t *ppos)
+{
+    return proc_file_read_core(file, buf, len, ppos, BUF_128);
+}
+
+static ssize_t
+proc_file_read_256 (struct file *file, char __user *buf, 
+                    size_t len, loff_t *ppos)
+{
+    return proc_file_read_core(file, buf, len, ppos, BUF_256);
+}
+
+static ssize_t
 proc_file_write (struct file *file, const char __user *buf,
                  size_t count, loff_t *ppos)
 {
@@ -128,19 +128,41 @@ proc_file_write (struct file *file, const char __user *buf,
     return retval;
 }
 
-static const struct file_operations proc_fops = {
-    .owner = THIS_MODULE,
-    .read  = proc_file_read,
-    .write = proc_file_write,
+static const struct file_operations proc_fops[] = {
+    {
+        .owner = THIS_MODULE,
+        .read  = proc_file_read_16,
+        .write = proc_file_write,
+    },
+    {
+        .owner = THIS_MODULE,
+        .read  = proc_file_read_64,
+        .write = proc_file_write,
+    },
+    {
+        .owner = THIS_MODULE,
+        .read  = proc_file_read_128,
+        .write = proc_file_write,
+    },
+    {
+        .owner = THIS_MODULE,
+        .read  = proc_file_read_256,
+        .write = proc_file_write,
+    }
 };
 
 int
 proc_file_create (void)
 {
+    int ii = 0;
+    char device_name[LOCAL_BUF_SZ + 1];
+
     do {
-        
         proc_dir = proc_mkdir("CDD", 0);
-        proc_stats = proc_create("myCDD", 0777, proc_dir, &proc_fops);
+        for (ii = 0; ii < CDDNUMDEVS; ii++) {
+            snprintf(device_name, LOCAL_BUF_SZ, "CDD%d", buf_type[ii]);
+            proc_stats[ii] = proc_create(device_name, 0777, proc_dir, &proc_fops[ii]);
+        }
 
         display_buffer.buf = vmalloc ((BUF_SZ + 1) * sizeof (char));
         if (display_buffer.buf == NULL) {
@@ -157,8 +179,14 @@ proc_file_create (void)
 void
 proc_file_destroy (void)
 {
-    if (proc_stats) {
-        remove_proc_entry("myCDD", proc_dir);
+    int ii = 0;
+    char device_name[LOCAL_BUF_SZ + 1];
+
+    for (ii = 0; ii < CDDNUMDEVS; ii++) {
+        snprintf(device_name, LOCAL_BUF_SZ, "CDD%d", buf_type[ii]);
+        if (proc_stats[ii]) {
+            remove_proc_entry(device_name, proc_dir);
+        }
     }
 
     if (proc_dir) {
