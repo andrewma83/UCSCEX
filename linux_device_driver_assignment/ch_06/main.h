@@ -8,6 +8,7 @@
 
 typedef struct _CDD_CONTEXT_T {
     int count;
+    unsigned poll_mask;
     char *storage;
     int num_open;
     spinlock_t sp;
