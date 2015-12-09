@@ -2,6 +2,7 @@ OBJ1 := main
 OBJ2 := proc
 OBJ3 := device
 OBJ4 := myps
+OBJ5 := interrupt_handler
 LDDM := CDDAMA
 
 #  create one .o .. from multiple .o files
@@ -12,7 +13,8 @@ $(LDDM)-objs := \
     $(OBJ1).o \
     $(OBJ2).o \
     $(OBJ3).o \
-    $(OBJ4).o
+    $(OBJ4).o \
+    $(OBJ5).o
 
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
@@ -40,6 +42,7 @@ clean:
 	    $(OBJ2).*o \
 	    $(OBJ3).*o \
 	    $(OBJ4).*o \
+	    $(OBJ5).*o \
 	    $(OBJ1).*.* \
 	    .$(OBJ1).* \
 	    $(OBJ2).*.* \
@@ -48,6 +51,8 @@ clean:
 	    .$(OBJ3).* \
 	    $(OBJ4).*.* \
 	    .$(OBJ4).* \
+	    $(OBJ5).*.* \
+	    .$(OBJ5).* \
 	    CDD2app \
 	    .tmp_versions* [mM]odule*
 
