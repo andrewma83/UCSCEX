@@ -55,7 +55,6 @@ CDD_get_stats (CDD_STATS_T *stats, int index)
     spin_lock(&context[index].sp);
     stats->num_open = context[index].num_open;
     spin_unlock(&context[index].sp);
-
 }
 
 static int

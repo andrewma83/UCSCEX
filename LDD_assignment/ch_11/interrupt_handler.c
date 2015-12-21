@@ -59,7 +59,6 @@ static void
 movement_work (struct work_struct *wk)
 {
    int ii;
-   printk(KERN_ERR "Get some movemnet with ctx_counter '%u'\n", mouse_info_ctx.counter);
 
    for (ii = 0; ii < 4; ii++) {
        printk (KERN_ERR "Flag[%d] => '%u'", ii, mouse_info_ctx.move_info.flag[ii]);
@@ -88,7 +87,6 @@ irq_handler(int irq, void *dev_id, struct pt_regs *regs)
     }
 
 
-    printk(KERN_ALERT, "Flag dump %d\n", inb(0x60));
     queue_work(mouse_info_ctx.wq, &mouse_info_ctx.wk);
 
     return IRQ_HANDLED;

@@ -36,31 +36,54 @@ prepare_display_buffer (int type)
     int len = 0;
     ssize_t unused_buf_sz = 0;
     CDD_STATS_T stats;
+    u16 value = 128;
+    u16 change_val;
+    char test_char;
 
     CDD_get_stats(&stats, type);
     unused_buf_sz = stats.alloc_sz - stats.used_sz;
     memset(display_buffer.buf, 0, BUF_SZ);
 
     len += snprintf (display_buffer.buf + len, BUF_SZ,
-                     "Group Number             : 0\n");
+                     "Group Number                             : 0\n");
 
     len += snprintf (display_buffer.buf + len, BUF_SZ,
-                     "Team Member              : '%s'\n", "Andrew Ma");
+                     "Team Member                              : '%s'\n", "Andrew Ma");
 
     len += snprintf (display_buffer.buf + len, BUF_SZ,
-                     "Buffer Length - Allocated: %lu\n", stats.alloc_sz);
+                     "Buffer Length - Allocated                : %lu\n", stats.alloc_sz);
 
     len += snprintf (display_buffer.buf + len, BUF_SZ - len,
-                     "Buffer Length - Used     : %lu\n", stats.used_sz);
+                     "Buffer Length - Used                     : %lu\n", stats.used_sz);
 
     len += snprintf (display_buffer.buf + len, BUF_SZ - len,
-                     "Buffer Length - Unused   : %lu\n", unused_buf_sz);
+                     "Buffer Length - Unused                   : %lu\n", unused_buf_sz);
 
     len += snprintf (display_buffer.buf + len, BUF_SZ - len,
-                     "Number of open files     : %d\n", stats.num_open);
+                     "Number of open files                     : %d\n", stats.num_open);
+
+    change_val = cpu_to_le16(value);   
+    len += snprintf (display_buffer.buf + len, BUF_SZ - len,
+                     "CPU Edianness                            : %s endian\n",
+                     (value == change_val) ? "Little" : "Big");
 
     len += snprintf (display_buffer.buf + len, BUF_SZ - len,
-                     "Mouse movement counter   : %d\n", mouse_info_ctx.counter);
+                     "Size of u8 u16 u32 u64                   : %lu %lu %lu %lu (in bytes)\n",
+                     sizeof (u8), sizeof (u16), sizeof (u32), sizeof (u64));
+
+    len += snprintf (display_buffer.buf + len, BUF_SZ - len,
+                     "Size of s8 s16 s32 s64                   : %lu %lu %lu %lu (in bytes)\n",
+                     sizeof (s8), sizeof (s16), sizeof (s32), sizeof (s64));
+
+    len += snprintf (display_buffer.buf + len, BUF_SZ - len,
+                     "Size of int8_t int16_t int32_t int64_t   : %lu %lu %lu %lu (in bytes)\n",
+                     sizeof (int8_t), sizeof (int16_t), sizeof (int32_t), sizeof (int64_t));
+
+
+    test_char = -1;
+    len += snprintf (display_buffer.buf + len, BUF_SZ - len,
+                     "Char is                                  : %s\n",
+                     (test_char < 0) ? "Signed" : "Unsigned)");
 }
 
 static ssize_t

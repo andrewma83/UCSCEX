@@ -37,8 +37,10 @@ CDD_init (void)
         i = ct_init();
         if (i) break;
         
+#if 0
         i = irq_init();
         if (i) break;
+#endif
     } while (0);
     
     return i;
@@ -50,7 +52,9 @@ CDD_exit (void)
     device_exit();
     proc_file_destroy();
     ct_exit();
+#if 0
     irq_exit();
+#endif
 }
 
 module_init (CDD_init);
